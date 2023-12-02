@@ -22,7 +22,7 @@ fn main() {
         panic!("Failed to read file {}", &filename);
     };
 
-    let mut possible_games: Vec<i32> = Vec::new();
+    let mut powers: Vec<i32> = Vec::new();
     let nan_regex = Regex::new(r"[^0-9]").unwrap();
 
     while let Some(Ok(line)) = &lines.next() {
@@ -39,14 +39,13 @@ fn main() {
         };
 
         let turns: Vec<&str> = splitted.next().unwrap().split(';').collect();
-        let mut is_game_possible = true;
+        let mut colors: HashMap<Color, Option<i32>> = HashMap::new();
 
         println!("Handling game {}: {:?}", &game_id, &line);
         let mut turn_count = 1;
         for turn_raw in &turns {
             let turn = turn_raw.trim();
 
-            let mut colors: HashMap<Color, Option<i32>> = HashMap::new();
             let steps: Vec<&str> = turn.split(',').collect();
             println!(
                 "Game {} on turn {} has {} steps: {:?}",
@@ -82,68 +81,44 @@ fn main() {
                 colors.entry(turn_color).or_insert_with(|| Some(0));
 
                 // * Update the value
-                colors
-                    .entry(turn_color)
-                    .and_modify(|x| *x = Some(x.unwrap() + num));
-            }
+                colors.entry(turn_color).and_modify(|x| {
+                    let existing = x.unwrap();
 
-            // * Now, compare against the available colors
-            let mut is_possible = true;
-            if let Some(red_color) = colors.entry(Color::Red).or_default() {
-                if red_color > &mut 12 {
-                    println!(
-                        "Turn {} on game {} is not possible: There are {} red on turn out of 12",
-                        &turn_count, &game_id, red_color
-                    );
+                    if existing >= num {
+                        *x = Some(existing);
+                        return;
+                    }
 
-                    is_possible = false;
-                }
-            };
-
-            if let Some(green_color) = colors.entry(Color::Green).or_default() {
-                if green_color > &mut 13 {
-                    println!(
-                        "Turn {} on game {} is not possible: There are {} green on turn out of 13",
-                        &turn_count, &game_id, green_color
-                    );
-
-                    is_possible = false;
-                }
-            };
-
-            if let Some(blue_color) = colors.entry(Color::Blue).or_default() {
-                if blue_color > &mut 14 {
-                    println!(
-                        "Turn {} on game {} is not possible: There are {} blue out of 14",
-                        &turn_count, &game_id, blue_color
-                    );
-
-                    is_possible = false;
-                }
-            };
-
-            if !is_possible {
-                println!("Turn {} on game {} is impossible", &turn_count, &game_id);
-                is_game_possible = false;
-                break;
+                    *x = Some(num)
+                });
             }
 
             turn_count += 1;
         }
 
-        if is_game_possible {
-            println!("Game {} is possible", &game_id);
-            possible_games.push(game_id);
-        }
+        let Some(Some(red_count)) = colors.get(&Color::Red) else {
+            println!("Game {} has yielded no red!", &game_id);
+            continue;
+        };
+
+        let Some(Some(green_count)) = colors.get(&Color::Green) else {
+            println!("Game {} has yielded no green!", &game_id);
+            continue;
+        };
+
+        let Some(Some(blue_count)) = colors.get(&Color::Blue) else {
+            println!("Game {} has yielded no blue!", &game_id);
+            continue;
+        };
+
+        let power = red_count * green_count * blue_count;
+        println!("Game {} has power of {}", &game_id, &power);
+        powers.push(power);
 
         println!("");
     }
 
-    println!(
-        "{} games are possible, sum: {}",
-        &possible_games.len(),
-        &possible_games.iter().sum::<i32>()
-    );
+    println!("Sum of powers: {}", powers.iter().sum::<i32>())
 }
 
 #[derive(Eq, PartialEq, Hash, Clone, Copy, Debug)]
