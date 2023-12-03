@@ -7,56 +7,36 @@ use std::path::Path;
 use regex::Regex;
 
 fn collect_number(line: &str) -> Option<(i32, i32, i32)> {
-    let mut has_found_number = false;
-    let mut start_set = false;
-    let mut end_set = false;
+    let mut num_start: Option<usize> = None;
+    let mut num_str = String::new();
 
-    let mut num_start: i32 = 0;
-    let mut num_end: i32 = 0;
-
-    let mut num_str = String::from("");
-
-    // * Iterate through the entire line and find a number
     for (i, curr_char) in line.char_indices() {
-        if curr_char == '.' || !curr_char.is_digit(10) {
-            // * Is at a dot or symbol of sorts
-            if has_found_number {
-                break; // * Completed a number, stop here
-            } else {
-                continue; // * No numbers, keep searching
-            }
-        } else if let Some(num) = curr_char.to_digit(10) {
-            // * Is a digit! update the indexes
-            match start_set {
-                false => {
-                    num_start = i as i32;
-                    start_set = true;
-                }
-                true => {
-                    num_end = i as i32;
-                    end_set = true;
-                }
+        if curr_char.is_digit(10) {
+            // If the number has not started yet, set the start index
+            if num_start.is_none() {
+                num_start = Some(i);
             }
 
-            // * Register we found a number
-            has_found_number = true;
-
-            // * Update the found number
-            num_str += &num.to_string();
+            // Add the digit to the number string
+            num_str.push(curr_char);
+        } else if let Some(start) = num_start {
+            // If the number had started and a non-digit is encountered, set end index and break
+            return match num_str.parse::<i32>() {
+                Ok(num) => Some((start as i32, i as i32, num)),
+                Err(_) => {
+                    println!("Failed to parse found number: {}", num_str);
+                    None
+                }
+            };
         }
     }
 
-    if !end_set {
-        num_end = num_start;
-    }
-
-    if has_found_number {
-        let Ok(num) = num_str.parse::<i32>() else {
-            println!("Failed to parse found number {}!", num_str);
-            return None;
-        };
-
-        return Some((num_start, num_end, num));
+    if let Some(start) = num_start {
+        if let Ok(num) = num_str.parse::<i32>() {
+            return Some((start as i32, (line.len()) as i32, num));
+        } else {
+            println!("Failed to parse found number: {}", num_str);
+        }
     }
 
     None
@@ -66,20 +46,22 @@ fn collect_all_numbers(line: &str) -> HashMap<(i32, i32), i32> {
     let mut numbers: HashMap<(i32, i32), i32> = HashMap::new();
 
     let mut current_line = line.clone();
-    let mut offset: i32 = 0;
+    println!("Line: {:?} - {}", &line, &line.len());
 
+    let mut offset: usize = 0;
     while let Some((start, end, number)) = collect_number(current_line) {
-        // * Register the number
-        let index = (start + offset, end + offset);
+        let index = (start + (offset as i32), end + (offset as i32));
         numbers.insert(index, number);
 
-        offset += end + 1;
-        if offset >= (current_line.len() as i32) {
-            break; // * Stop if we already hit the end
-        }
+        current_line = &current_line[(end as usize)..]; // Update the line for the next iteration
+        offset += end as usize;
 
-        // * Update the line
-        current_line = &current_line[(offset as usize)..(current_line.len() - 1)];
+        println!("Collected number {} at {:?}", &number, &index);
+        println!("Line: {:?} - {}", &current_line, &current_line.len());
+
+        if (end as usize) >= line.len() {
+            break; // Stop if we're at the end
+        }
     }
 
     println!("Found numbers: {:?}", &numbers);
@@ -126,13 +108,17 @@ fn main() {
         if index != 0 {
             // * Get the previous line
             if let Some(Ok(ln)) = &lines_iter.get(index - 1) {
+                if ln != "" {
                 previous_line = Some(ln);
+                }
             }
         }
 
         // * Get the next line
         if let Some(Ok(ln)) = &lines_iter.get(index + 1) {
-            next_line = Some(ln);
+            if ln != "" {
+                next_line = Some(ln);
+            }
         }
 
         // * For every number found, check if there is a adjacent symbol
@@ -150,10 +136,14 @@ fn main() {
                 _ => start.clone(),
             };
 
-            let fetch_end = match end {
+            let mut fetch_end = match end {
                 x if x != &line_max => x + 2,
                 _ => line_max,
             };
+
+            if fetch_end >= line_max {
+                fetch_end = line_max;
+            }
 
             if let Some(prev_line) = &previous_line {
                 // * Should fetch this slice
